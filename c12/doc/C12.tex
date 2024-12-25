@@ -1,0 +1,621 @@
+\documentclass{ctexart}
+\usepackage[a4paper,left=1pt,right=1pt,bottom=1pt,top=1pt]{geometry}  % 设置边距
+\usepackage{graphicx}  % 引入graphicx宏包
+\usepackage{tikz}
+\usepackage{multirow}
+\usetikzlibrary{calc}
+\usetikzlibrary {through,intersections,positioning,arrows.meta}
+\usepackage[table]{xcolor}
+\usetikzlibrary{patterns,snakes}
+\usetikzlibrary{matrix}
+\pgfdeclarelayer{background}
+\pgfdeclarelayer{foreground}
+\pgfsetlayers{background,main,foreground}
+\usepackage{eqparbox}
+\usepackage{longtable, array}
+\usepackage{multirow}
+\usepackage{minted}
+\usepackage{booktabs}
+\usepackage{float,afterpage}
+\usepackage{bytefield}
+
+\newbox\matrixcellbox
+
+\newcommand{\bitrect}[2]{
+  \begin{pgfonlayer}{foreground}
+    \pgfmathsetmacro\cellwidth{#1*0.6}
+    \draw [thick] (0,0) rectangle (\cellwidth,1.5) coordinate[midway,below=15pt] (b1);
+    \pgfmathsetmacro\result{#1-1}
+    \foreach \x in {1,...,\result}
+      \draw [thick] (\x*0.6,1.5) -- (\x*0.6, 1.3);
+  \end{pgfonlayer}
+%  \node [below left, align=right] at (0,0) {Type \\ Reset};
+  \bitlabels{#1}{#2}
+}
+\newcommand{\rwbits}[3]{
+  \draw [thick] (#1*0.6,0) rectangle ++(#2*0.6,1.5) node[align=center,pos=0.5]{#3} ;
+%   \pgfmathsetmacro\start{#1+0.5}
+%   \pgfmathsetmacro\finish{#1+#2-0.5}
+%  \foreach \x in {\start,...,\finish}
+%    \node [below, align=center] at (\x, 0) {R/W \\ 0};
+}
+\newcommand{\robits}[3]{
+  \begin{pgfonlayer}{background}
+    \draw [thick, fill=lightgray] (#1*0.6,0) rectangle ++(#2*0.6,1) node[rotate=90,pos=0.5]{#3};
+  \end{pgfonlayer}
+  % \pgfmathsetmacro\start{#1+0.5}
+  % \pgfmathsetmacro\finish{#1+#2-0.5}
+%  \foreach \x in {\start,...,\finish}
+%    \node [below, align=center] at (\x, 0) {RO \\ 0};
+}
+\newcommand{\bitlabels}[2]{
+  \foreach \bit in {1,...,#1}{
+     \pgfmathsetmacro\result{#2}
+     \node [above] at (\bit*0.6-0.3, 1.5) {\pgfmathprintnumber{\result}} ;
+   }
+}
+
+\newcommand{\memsection}[4]{%
+    % define the height of the memsection
+    \bytefieldsetup{bitheight=#3\baselineskip}%
+    \bitbox[]{10}{%
+        \texttt{#1}% print end address
+        \\
+        % do some spacing
+        \vspace{#3\baselineskip}
+        \vspace{-2\baselineskip}
+        \vspace{-#3pt}
+        \texttt{#2}% print start address
+    }%
+    \bitbox{16}[bgcolor=white]{#4}% print box with caption
+}
+
+\tikzset{
+    l column/.style={
+        execute at begin 
+        node={\setbox\matrixcellbox=\hbox\bgroup},
+        execute at end
+        node={\egroup\eqmakebox[\tikzmatrixname\the\pgfmatrixcurrentcolumn][l]{\copy\matrixcellbox}}
+    },
+    register/.style={matrix of nodes,nodes={l column},draw,rounded corners,column sep=0pt,
+        execute at end matrix={
+            \draw (\tikzmatrixname-1-1.south) -- (\tikzmatrixname-2-1.north)
+            coordinate[midway](tmpH)
+            (\tikzmatrixname-1-\the\numexpr\pgfmatrixcurrentcolumn-1\relax.east) -- (\tikzmatrixname-1-\the\pgfmatrixcurrentcolumn.west) 
+            coordinate[midway](tmpV);
+            \draw (\tikzmatrixname.west|-tmpH) -- (\tikzmatrixname.east|-tmpH) 
+            (\tikzmatrixname.north-|tmpV) -- (\tikzmatrixname.south-|tmpV);
+        }
+    },
+    do path picture/.style={%
+      path picture={%
+        \pgfpointdiff{\pgfpointanchor{path picture bounding box}{south west}}%
+          {\pgfpointanchor{path picture bounding box}{north east}}%
+        \pgfgetlastxy\x\y%
+        \tikzset{x=\x/2,y=\y/2}%
+        #1
+      }
+    },
+    plus/.style={do path picture={    
+      \draw [line cap=round] (-3/4,0) -- (3/4,0) (0,-3/4) -- (0,3/4);
+    }}
+}
+
+\begin{document}
+
+  \begin{figure}[htpb]
+    \begin{tikzpicture}
+    
+      \bitrect{32}{32-\bit}
+      \rwbits{0}{8}{段基地址31 \textasciitilde 24}
+      \rwbits{8}{1}{G}
+      \rwbits{9}{1}{D \\ / \\ B}
+      \rwbits{10}{1}{L}
+      \rwbits{11}{1}{A \\ V \\ L}
+      \rwbits{12}{4}{段界限 \\ 19\textasciitilde 16}
+      \rwbits{16}{1}{P}
+      \rwbits{17}{2}{DPL}
+      \rwbits{19}{1}{S}
+      \rwbits{20}{4}{TYPE}
+      \rwbits{24}{8}{段基地址23\textasciitilde 16}
+      \coordinate (G) at (8*0.6+0.3,0);
+      \matrix[register,below=2cm of G.south,xshift=-3cm] (GDesc){
+        G & 段界限粒度位\\
+        0  & 字节为单位\\
+        1  & 4KB为单位\\
+      };
+      \draw[-stealth] (G) -- (8*0.6+0.3,-1) -| (GDesc);
+      %
+      \coordinate (D) at (9*0.6+0.3,0);
+      \matrix[register,below=2cm of D.south] (DDesc){
+        D/B & 默认操作尺寸\\
+        0  & 16位\\
+        1  & 32位\\
+      };
+      \draw[-stealth] (D) -- (9*0.6+0.3,-1) -| (DDesc);
+      %
+      \coordinate (L) at (10*0.6+0.3,0);
+      \matrix[register,below=6cm of L.south,xshift=1.5cm] (LDesc){
+        L & 64位代码段标志\\
+        0  & 32位\\
+        1  & 64位\\
+      };
+      \draw[-stealth] (L) -- (10*0.6+0.3,-1) -| (LDesc);
+      %
+      \coordinate (AVL) at (11*0.6+0.3,0);
+      \node [draw,below=1cm of AVL.south,xshift=2cm,align=center] (AVLDesc) {软 \\ 件 \\ 可 \\使 \\用 \\的\\位\\置};
+      \draw[-stealth] (AVL) -- (11*0.6+0.3,-0.5) -| (AVLDesc);
+      %
+      \coordinate (P) at (16*0.6+0.3,0);
+      \node [draw,below=1cm of P.south,align=center] (PDesc) {段 \\ 存 \\ 在 \\位};
+      \draw[-stealth] (P) -- (16*0.6+0.3,-0.5) -| (PDesc);
+      %
+      \coordinate (DPL) at (17*0.6+0.3,0);
+      \matrix[register,below=6cm of L.south,xshift=6cm] (DPLDesc){
+        DPL & 描述符特权级\\
+        0  & 最高特权级\\
+        1  & \\
+        2  & \\
+        3  & 最低特权级\\
+      };
+      \draw[-stealth] (DPL) -- (17*0.6+0.3,-5) -| (DPLDesc);
+      %
+      \coordinate (S) at (19*0.6+0.3,0);
+      \matrix[register,below=2cm of S.south,xshift=1cm] (SDesc){
+        S & 描述符的类型\\
+        0  & 系统段\\
+        1  & 代码段或数据段\\
+      };
+      \draw[-stealth] (S) -- (19*0.6+0.3,-1) -| (SDesc);
+      %
+      \coordinate (TYPE) at (22*0.6+0.3,0);
+      \node [draw,below=1cm of TYPE.south,align=center,xshift=2cm] (TYPEDesc) {参考 表\ref{demo-table}};
+      \draw[-stealth] (TYPE) -- (22*0.6+0.3,-0.5) -| (TYPEDesc);
+
+   
+    \end{tikzpicture}
+    \begin{tikzpicture}
+      \bitrect{32}{32-\bit}
+      \rwbits{0}{16}{段基地址15 \textasciitilde 0}
+      \rwbits{16}{16}{段界限15 \textasciitilde 0}
+    \end{tikzpicture}
+    \caption{段描述符}
+
+  \end{figure}
+  %
+  \begin{table}[htpb]
+    \begin{center}
+    
+      \begin{tabular}{|c | c | c | c| c|c|} 
+        \hline
+        \rowcolor{gray!30}
+        X &  E &  W & A & 描述符类别 & 含义 \\ \hline
+        \textcolor{red}{0} &  0 &  0 & X & \multirow{4}{*}{数据} & 只读\\ \cline{1-4}  \cline{6-6}
+        \textcolor{red}{0} &  0 &  1 & X &  & 读、写\\ \cline{1-4}  \cline{6-6}
+        \textcolor{red}{0} &  1 &  0 & X &  & 只读、向下扩展\\ \cline{1-4}  \cline{6-6}
+        \textcolor{red}{0} &  1 &  1 & X & & 读、写、向下扩展\\ \hline
+        \rowcolor{gray!30}
+        X & C & R & A & 描述符类别 & 含义 \\ \hline
+        \textcolor{blue}{1} & 0 & 0 & X & \multirow{4}{*}{代码} & 只执行 \\ \cline{1-4}  \cline{6-6}
+        \textcolor{blue}{1} & 0 & 1 & X & & 只执行 \\ \cline{1-4}  \cline{6-6}
+        \textcolor{blue}{1} & 1 & 0 & X & & 只执行、依从的代码段 \\ \cline{1-4}  \cline{6-6}
+        \textcolor{blue}{1} & 1 & 1 & X & & 执行、读、依从的代码段 \\ \hline
+      \end{tabular}
+      \caption{代码段和数据段描述符的TYPE字段}
+    \label{demo-table}
+    \end{center}
+  \end{table}
+
+  % GDT和GDTR的关系
+  \begin{figure}[h]
+    \centering
+    \begin{tikzpicture}
+      % 画一个方框并在其中添加文字
+      \node[draw, minimum width=100, minimum height=100, align=center] at (0,0) {处理器};
+      \node[draw, minimum width=60, minimum height=20, align=center] at (0.5,1) {GDTR};
+      \node[draw, shape=circle,inner sep=0.5mm,fill=red!20] at (1.2, 1) (A) {};
+      \node[draw, minimum width=100, minimum height=30, align=center,right =5cm of A,anchor=north west] (MB) {};
+      \node[draw, minimum width=100, minimum height=20, align=center,above =0 of MB] (GDT) {GDT};
+      \node[draw, minimum width=100, minimum height=40, above =0 of GDT] (MU) {};
+      \node[draw, minimum width=100, minimum height=150, above =0 of MU] (E) {};
+      \draw[->,>={Stealth}] (A) -- (MB.north west);
+      \node[left = 0.5 of MB,anchor=north east,] (F) {00000000};
+      \node[left = 0.5 of MU,anchor=south east,yshift=10] (G) {000FFFFF};
+      \node[left = 0.5 of E,anchor=south east,yshift=70] (H) {FFFFFFFF};
+    \end{tikzpicture}
+    \caption{GDT和GDTR的关系}
+    \label{fig:GDTGDTR}
+  \end{figure}
+
+  \newpage
+  % 全局描述符表寄存器GDTR
+  \begin{figure}[h]
+    \centering
+    \begin{bytefield}[bitheight=\widthof{~Sign~},
+      boxformatting={\centering}]{48}
+      \bitheader[endianness=big]{47,16,15,0} \\
+      \bitbox{32}{全局描述符表线性基地址} &
+      \bitbox{16}{全局描述符表边界} 
+
+      \end{bytefield}
+      \caption{全局描述符表寄存器GDTR}
+      \label{fig:GDTR}
+  \end{figure}
+
+  % \newpage
+  %段寄存器与段选择子
+  \begin{figure}[h]
+   
+    \centering
+    \begin{tikzpicture}[>=latex]   
+        
+
+            % \foreach \x in {0,...,15}
+            %   \node [right=0.5*\x of Selector.north west] (a\x) {\x} ;
+            \node at (10,0) [rectangle,draw=black,thick,minimum width=50,anchor=west] (CS)  {CS};
+            \node [rectangle,draw=black,dashed,minimum width=150,right=of CS] (CSCache) {段的线性基地址、界限和属性};
+            \node [rectangle,draw=black,thick,minimum width=50,below=0.5 of CS] (DS) {DS};
+            \node [rectangle,draw=black,dashed,minimum width=150,right=of DS] (DSCache) {段的线性基地址、界限和属性};
+            \node [rectangle,draw=black,thick,minimum width=50,below=0.5 of DS] (ES) {ES};
+            \node [rectangle,draw=black,dashed,minimum width=150,right=of ES] (ESCache) {段的线性基地址、界限和属性};
+            \node [rectangle,draw=black,thick,minimum width=50,below=0.5 of ES] (FS) {FS};
+            \node [rectangle,draw=black,dashed,minimum width=150,right=of FS] (FSCache) {段的线性基地址、界限和属性};
+            \node [rectangle,draw=black,thick,minimum width=50,below=0.5 of FS] (GS) {GS};
+            \node [rectangle,draw=black,dashed,minimum width=150,right=of GS] (GSCache) {段的线性基地址、界限和属性};
+            \node [rectangle,draw=black,thick,minimum width=50,below=0.5 of GS] (SS) {SS};
+            \node [rectangle,draw=black,dashed,minimum width=150,right=of SS] (SSCache) {段的线性基地址、界限和属性};
+
+            % \node at (0,-4)  [rectangle,draw=black,thick,inner sep=10,minimum width=4] (Selector) {Selector};
+            \draw [thick] (0,-3) rectangle (6.4,-2) coordinate[below=0.5] (Selector) node[ pos=0.5, anchor=south,above=1] {\textcolor{red}{段选择子  (Selector)}};
+            \foreach \x in {1,...,16}
+              \draw [thick] (\x*0.4,-2) -- (\x*0.4, -2.1);
+            \foreach \bit in {0,...,15} 
+              \node [above] at (6.4 - \bit*0.4-0.2, -2) {\bit};
+            \draw [thick] (0,-3) rectangle (5.2,-2) node[pos=0.5]{描述符索引};
+            \draw [thick] (5.2,-3) rectangle (5.6,-2) coordinate[midway,below=0.5] (TI) node[pos=0.5,align=center] {T \\ I};
+            \draw [thick] (5.6,-3) rectangle (6.4,-2) coordinate[midway,below=0.5] (RPL) node[pos=0.5,align=center] {RPL};  
+
+
+            \matrix[register,below=1 of TI.south,xshift=-120] (TIDesc){
+              TI & 描述符表指示器\\
+              0  & 描述符在GDT中\\
+              1  & 描述符在LDT中 \\
+            };
+
+            \node [draw,below=1 of RPL.south,align=left] (RPLDesc) {请求特权级:\\
+            给出当前选择子的\\那个程序的特权级别\\正是该程序要求访问这个内存段};
+
+
+            % \draw[-stealth] (TI.south) -- (TIDesc);
+            % \node [above] at ($(Selector.north west)!0.5!(a1)$) {15} ;
+            % \node [above] at ($(a2)!0.5!(a3)$) {14} ;
+            % \node [below=15pt of Selector]  {aa} ;
+            \draw [->] (Selector.east) -- (CS.west);
+            \draw [->] (Selector.east) -- (DS.west);
+            \draw [->] (Selector.east) -- (ES.west);
+            \draw [->] (Selector.east) -- (FS.west);
+            \draw [->] (Selector.east) -- (GS.west);
+            \draw [->] (Selector.east) -- (SS.west);
+            % \node[] (n1) [below=of SS.west] {} ;
+
+            % \node[] (n2) [below= of n1] {} ;
+
+            % \node[] (n3) [below=of SS.east] {} ;
+
+            % \node[] (n4) [below= of n3] {} ;
+
+            % \draw (n1) -- (n2) ;
+            % \draw (n3) -- (n4) ;
+
+            % \node[] (a) at ($(n1)!0.5!(n2)$) {};
+            % \node[] (b) at ($(n3)!0.5!(n4)$) {};
+
+            \draw [
+              thick,
+              decoration={
+                  brace,
+                  mirror,
+                  raise=0.5cm
+              },
+              decorate
+            ] (SS.south west) -- (SS.south east)  
+            node [pos=0.5,anchor=north,yshift=-20] {\textcolor{red}{段选择器}}; 
+
+            \draw [
+              thick,
+              decoration={
+                  brace,
+                  mirror,
+                  raise=0.5cm
+              },
+              decorate
+            ] (SSCache.south west) -- (SSCache.south east)  
+            node [pos=0.5,anchor=north,yshift=-20] {\textcolor{red}{描述符高速缓存器}}; 
+            % \draw[<->](a.center) --node[fill=white]{段选择器} (b.center) ;
+
+            % \begin{pgfonlayer}{foreground}
+            %   \pgfmathsetmacro\cellwidth{16*0.6}
+            %   \draw [thick,left=5cm of ES] (0,0) rectangle (\cellwidth,1.5) coordinate[midway,below=15pt] (b1);
+            %   \pgfmathsetmacro\result{15}
+            %   \foreach \x in {1,...,\result}
+            %     \draw [thick] (\x*0.6,1.5) -- (\x*0.6, 1.3);
+            % \end{pgfonlayer}
+
+            % \foreach \x in {1,...,15}
+            % \draw [thick] (\x*0.5,1.5) -- (\x*0.5, 1.3);
+     
+    \end{tikzpicture}
+
+    \caption{段寄存器与段选择子}
+    \label{fig:example}
+  \end{figure}
+  \newpage
+  % 段选择器和描述符高速缓存器的加载过程
+  \begin{figure}[h]
+    \centering
+    \begin{tikzpicture}
+      \node[draw] at (-4,-1 ) (selector) {段选择子(TI=0)} ;
+      \node[draw,right =1 of selector] (DS) {DS} ;
+      \draw[thick, red, ->] (selector) -- node[above]{1}(DS);
+      \node[draw,dashed,right =0.1 of DS,minimum width=40, minimum height=15] (empty) {} ;
+      \coordinate[right = 10 of empty] (pivot1) {} ;
+      % 画一个方框并在其中添加文字
+      \node[draw, minimum width=100, minimum height=100, align=center] at (0,0) {处理器};
+      \node[draw, minimum width=50, minimum height=20, align=center] at (0.5,1) {GDTR};
+      \node[draw, shape=circle,inner sep=0.5mm,fill=red!20] at (1.2, 1) (A) {};
+      \node [circle, draw,plus,scale=2] at (3,1) (circleplus)   {};
+  
+      \node[draw, minimum width=100, minimum height=20, align=center,right =5cm of A,anchor=north west,yshift=-20] (MB) {MB};
+      \node[draw, minimum width=100, minimum height=40, align=center,above =0 of MB] (GDT) {GDT};
+      \coordinate[above = 2 of GDT.south west] (MU) {};
+      \node[draw, minimum width=100, minimum height=150, above =0 of GDT] (E) {};
+      \draw[->,>={Stealth}] (A) -- (circleplus);
+      \draw[->,>={Stealth},red] (circleplus) --node[above]{2} (GDT);
+      % \draw[->,>={Stealth}] (A)  --node[below]{dd} (MB.north west);
+      \node[left = 0.5 of MB,anchor=north east,] (F) {00000000};
+    
+      \node[left = 0.5 of E,anchor=south east,yshift=70] (H) {FFFFFFFF};
+      \coordinate[above = 2 of circleplus] (B) {} ;
+      \draw[thick, red, ->] (DS.north) |- node[above,xshift=20]{X8}(B) -- (circleplus);
+  
+      \node[draw, shape=circle,inner sep=0.5mm,fill=red!20,above=1 of MB.south,xshift=10] (C) {};
+      \draw[thick, red, ->] (GDT) -| node[above]{3}(pivot1) -- (empty);
+    \end{tikzpicture}
+    \caption{段选择器和描述符高速缓存器的加载过程}
+    \label{fig:cacheload}
+  \end{figure}
+
+  % 保护模式下的内存访问
+  \begin{figure}[h]
+    \centering
+    \begin{tikzpicture}
+      \node (code) at (0,6) {mov byte[0x00],'p'};
+      \draw[thick] ([xshift=-5mm]code.south) -- ([xshift=5mm]code.south);
+
+      \node[draw] at (-4,-1 ) (selector) {段选择子} ;
+      \node[draw,right =2 of selector] (DS) {DS} ;
+      \node[draw,dashed,right =0.1 of DS,minimum width=40, minimum height=15] (empty) {} ;
+      % 画一个方框并在其中添加文字
+      \node[draw, minimum width=100, minimum height=100, align=center] (cpu) at (0,0) {处理器};
+      % \node[draw, minimum width=50, minimum height=20, align=center] at (0.5,1) {GDTR};
+      % \node[draw, shape=circle,inner sep=0.5mm,fill=red!20] at (1.2, 1) (A) {};
+      \node [circle, draw,plus,scale=2] at (3,3) (circleplus)   {};
+  
+      \node[draw, minimum width=100, minimum height=145, align=center,right =5cm of cpu] (MB) {MB};
+      \node[draw, minimum width=100, minimum height=20, align=center,above =0 of MB] (P) {P};
+      \coordinate[above = 2 of P.south west] (MU) {};
+      \node[draw, minimum width=100, minimum height=150, above =0 of P] (E) {};
+      % \draw[->,>={Stealth}] (A) -- (circleplus);
+      \draw[->,>={Stealth}] (circleplus) --node[above]{000B8000} (P);
+      % \draw[->,>={Stealth}] (A)  --node[below]{dd} (MB.north west);
+      \node[left = 0.5 of MB,anchor=north east,yshift=-60] (F) {00000000};
+    
+      \node[left = 0.5 of E,anchor=south east,yshift=70] (H) {FFFFFFFF};
+      \coordinate[above = 2 of circleplus] (B) {} ;
+      % \draw[thick, red, ->] (DS.north) |- node[above,xshift=20]{X8}(B) -- (circleplus);
+  
+      % \node[draw, shape=circle,inner sep=0.5mm,fill=red!20,above=1 of MB.south,xshift=10] (C) {};
+
+      \draw[thick, red, ->] (empty) -| node[above,fill=white]{32位基地址}(circleplus) ;
+      \draw[thick, red, ->] (code.south) |- node[midway,fill=white,yshift=20]{段内偏移}(circleplus) ;
+    \end{tikzpicture}
+    \caption{保护模式下的内存访问}
+    \label{fig:memoryAccess}
+  \end{figure}
+  \newpage
+  % 保护模式下的处理器取指令的过程
+  \begin{figure}[h]
+  \centering
+  \begin{tikzpicture}
+    % \node (code) at (0,6) {mov byte[0x00],'p'};
+    % \draw[thick] ([xshift=-5mm]code.south) -- ([xshift=5mm]code.south);
+
+    % \node[draw] at (-4,-1 ) (selector) {段选择子} ;
+    \node[draw,right =2 of selector] (DS) {CS} ;
+    \node[draw,dashed,right =0.1 of DS,minimum width=40, minimum height=15] (empty) {} ;
+    % 画一个方框并在其中添加文字
+    \node[draw, minimum width=100, minimum height=100, align=center] (cpu) at (0,0) {处理器};
+    \node[draw, minimum width=50, minimum height=20, align=center] at (0.5,1) {EIP};
+    \node[draw, shape=circle,inner sep=0.5mm,fill=red!20] at (1.2, 1) (A) {};
+    \node [circle, draw,plus,scale=2] at (3,1) (circleplus)   {};
+
+    \node[draw, minimum width=100, minimum height=40, align=center,right =5cm of cpu] (MB) {MB};
+    \node[draw, minimum width=100, minimum height=20, align=center,above =0 of MB] (P) {指令};
+    \coordinate[above = 2 of P.south west] (MU) {};
+    \node[draw, minimum width=100, minimum height=150, above =0 of P] (E) {};
+    \draw[->,>={Stealth}] (A) -- (circleplus);
+    \draw[->,>={Stealth}] (circleplus) -- (P);
+    % \draw[->,>={Stealth}] (A)  --node[below]{dd} (MB.north west);
+    \node[left = 0.5 of MB,anchor=north east,yshift=-10] (F) {00000000};
+  
+    \node[left = 0.5 of E,anchor=south east,yshift=60] (H) {FFFFFFFF};
+    \coordinate[above = 2 of circleplus] (B) {} ;
+    % \draw[thick, red, ->] (DS.north) |- node[above,xshift=20]{X8}(B) -- (circleplus);
+
+    % \node[draw, shape=circle,inner sep=0.5mm,fill=red!20,above=1 of MB.south,xshift=10] (C) {};
+
+    \draw[thick, red, ->] (empty) -| node[above,fill=white]{32位基地址}(circleplus) ;
+    % \draw[thick, red, ->] (code.south) |- node[midway,fill=white,yshift=20]{段内偏移}(circleplus) ;
+  \end{tikzpicture} 
+  \caption{保护模式下处理器取指令的过程}
+  \label{fig:instructionAccess}
+\end{figure}
+
+
+  \begin{longtable}{ |*{1}{m{.55\paperwidth}} | *{1}{m{.40\paperwidth}} |}
+      \toprule
+      \begin{minted}[escapeinside=??]{nasm}
+.text
+entry start
+start:
+mov ax,cs
+mov ss,ax
+mov sp,#0x7c00  
+      \end{minted}
+      & 初始化栈,参考保护模式前的内存映像图\ref{fig:memoryMap}  \\
+      \cline{2-2}
+      \begin{minted}[escapeinside=??]{nasm}
+mov ah,#0x00
+mov al,#0x03
+int 0x10
+      \end{minted} 
+      &   bios清屏功能  \\
+      \cline{2-2}
+      \begin{minted}[escapeinside=??]{nasm}
+seg cs
+mov ax, gdt_base+0x7c00 
+seg cs
+mov dx, gdt_base+0x7c00 + 0x02
+mov bx,#16
+div bx  
+      \end{minted} 
+      & 
+      \colorbox{gray!80} {\Large div bx}
+      $$
+          \frac{DX:AX}{BX} = AX.DX
+      $$ 
+      商在 AX 中, 余数在 DX 中  \newline 
+      在此示例中: \newline
+      将GDT的基地址右移4位得到段地址存到AX中，段内偏移地址存到dx中    \\
+      \cline{2-2}
+      \begin{minted}[escapeinside=??]{nasm}
+mov ds,ax
+mov bx,dx
+      \end{minted} 
+      & 将gdt基地址的段地址存到ds,偏移地址存到bx中  \\
+      \cline{2-2}
+      \begin{minted}[escapeinside=??]{nasm}
+mov dword 0(bx),#0x00
+mov dword 4(bx),#0x00
+      \end{minted}     
+      & GDT的第一个描述符为空描述符   \\
+      \cline{2-2}
+      \begin{minted}[escapeinside=??]{nasm}
+mov dword 0x08(bx),#0x8000ffff
+mov dword 0x0c(bx),#0x0040920b
+      \end{minted} 
+      & 
+      段线性地址=0x000B8000   \newline
+      G=0:段粒度为字节     \newline
+      段界限=FFFF:结合G=0，该段的长度为64KB   \newline
+      S=1:存储器的段          \newline
+      D=1：32位操作尺寸       \newline
+      P=1:该段目前位于内存中   \newline
+      DPL=000:段的特权级为0    \newline
+      TYPE=0010:可读可写、向上扩展的数据段    \\
+      \cline{2-2}
+      \begin{minted}[escapeinside=??]{nasm}
+seg cs
+mov word gdt_size + 0x7c00,#15
+      \end{minted} 
+      & 设置gdt的边界     \\
+      \cline{2-2}
+      \begin{minted}[escapeinside=??]{nasm}
+seg cs
+lgdt gdt_size+0x7c00
+      \end{minted}   
+      &       
+      \colorbox{gray!80}{\Large ldgt m}：加载描述符表的线性基地址和界限   \newline
+      在有效地址m处，包含了GDT的32位线性地址和16位界限值,共6字节,参考图\ref{fig:GDTR}  \\
+      \cline{2-2}
+      \begin{minted}[escapeinside=??]{nasm}
+in al,#0x92 
+or al,#0x02
+out 0x92,al 
+cli
+      \end{minted}   
+      & 打开A20 \\
+      \cline{2-2}
+      \begin{minted}[escapeinside=??]{nasm}
+mov eax,cr0
+or eax,#1
+mov cr0,eax 
+      \end{minted}   
+      & 开启保护模式 \\
+      \cline{2-2}
+      \begin{minted}[escapeinside=??]{nasm}
+mov cx,#0x08
+mov ds,cx
+      \end{minted}   
+      & 将段选择子传到段选择器，参考图\ref{fig:cacheload} \\
+      \cline{2-2}
+      \begin{minted}[escapeinside=??]{nasm}
+mov byte 0x00,#0x50
+mov byte 0x02,#0x72
+mov byte 0x04,#0x6F
+mov byte 0x06,#0x74
+mov byte 0x08,#0x65
+mov byte 0x0a,#0x63
+mov byte 0x0c,#0x74
+mov byte 0x0e,#0x20
+mov byte 0x10,#0x6D
+mov byte 0x12,#0x6F
+mov byte 0x14,#0x64
+mov byte 0x16,#0x65
+mov byte 0x18,#0x20
+mov byte 0x1A,#0x4F
+mov byte 0x01C,#0x4B
+mov byte 0x1E,#0x2E
+      \end{minted}    
+      & 将数据传到到段描述符指定的线性地址加偏移量处 \\
+      \cline{2-2}
+      \begin{minted}[escapeinside=??]{nasm}
+hlt
+      \end{minted}   
+      & cpu暂停  \\
+      \cline{2-2}
+      \begin{minted}[escapeinside=??]{nasm}
+gdt_size:         .word 0
+      \end{minted} 
+      & 存放GDT的界限值 \\
+      \cline{2-2}
+      \begin{minted}[escapeinside=??]{nasm}
+gdt_base:   .word 0x7e00,0x0000
+      \end{minted}    
+      & 声明GDT的起始物理地址 \\
+      \cline{2-2}
+      \begin{minted}[escapeinside=??]{nasm}
+.org 510
+.word 0xAA55
+      \end{minted}   
+      & cpu暂停  \\
+      \cline{2-2}
+  \end{longtable}
+ 
+  \begin{figure}
+    \centering
+    \begin{bytefield}{26}
+      \memsection{FFFF FFFF}{}{15}{-- free --}\\
+      \begin{rightwordgroup}{1MB}
+        \memsection{000F FFFF}{}{4}{} \\
+        \memsection{0001 7DFF}{0000 7E00}{4}{GDT，最大64KB}\\
+        \memsection{}{0000 7C00}{3}{主引导程序,512字节}\\
+        \memsection{}{0000 0000}{8}{栈空间，从7c00向下推进}
+      \end{rightwordgroup}\\
+    \end{bytefield}
+    \caption{进入保护模式前的内存映像}
+    \label{fig:memoryMap}
+  \end{figure}
+
+  
+\end{document}
